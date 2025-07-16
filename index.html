@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kawaii Avatar System</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Basic reset for Electron */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars */
+        }
+        /* Ensure React app fills the window */
+        #root {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+    <!-- React and ReactDOM Libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        const { useState, useEffect, useRef, useCallback } = React;
+        const ReactDOM = window.ReactDOM;
+
+        const App = () => {
+          const defaultAvatarStates = [
+            { name: 'Neutral', src: 'https://placehold.co/200x200/FFD700/000?text=Avatar+Neutral' },
+            { name: 'Happy', src: 'https://placehold.co/200x200/FFD700/000?text=Avatar+Happy' },
+            { name: 'Mouth Open', src: 'https://placehold.co/200x200/FFD700/000?text=Avatar+Open' },
+            { name: 'Surprised', src: 'https://placehold.co/200x200/FFD700/000?text=Avatar+Surprised' },
+          ];
+
+          const [currentAvatarIndex, setCurrentAvatarIndex] = useState(0);
+          const [currentAvatarType, setCurrentAvatarType] = useState('default');
+          const [customAvatarStates, setCustomAvatarStates] = useState(Array(4).fill(null));
+
+          const defaultBackgrounds = [
+            { name: 'Background 1', src: 'https://placehold.co/1280x720/6A5ACD/FFF?text=Background+1' },
+            { name: 'Background 2', src: 'https://placehold.co/1280x720/228B22/FFF?text=Background+2' },
+            { name: 'Background 3', src: 'https://placehold.co/1280x720/191970/FFF?text=Background+3' },
+            { name: 'Background 4', src: 'https://placehold.co/1280x720/8A2BE2/FFF?text=Background+4' },
+          ];
+          const [currentBackgroundIndex, setCurrentBackgroundIndex] = useState(0);
+          const [currentBackgroundType, setCurrentBackgroundType] = useState('default');
+          const [customBackgroundStates, setCustomBackgroundStates] = useState(Array(4).fill(null));
+
+          const [avatarPosition, setAvatarPosition] = useState({ x: 50, y: 50 });
+          const [avatarSize, setAvatarSize] = useState(192);
+          const AVATAR_SIZE_MIN = 50;
+          const AVATAR_SIZE_MAX = 500;
+
+          const avatarRef = useRef(null);
+          const displayAreaRef = useRef(null); // Ref for the main scene container which now also clips
+
+          const [showSceneMenu, setShowSceneMenu] = useState(false);
+          const [message, setMessage] = useState('');
+
+          const [isMouseFollowEnabled, setIsMouseFollowEnabled] = useState(false);
+          const [isAvatarLocked, setIsAvatarLocked] = useState(false);
+
+          const [showUI, setShowUI] = useState(true);
+          const [showControlMap, setShowControlMap] = useState(false);
+          const [showAvatarBorder, setShowAvatarBorder] = useState(true);
+
+          const [isEditingAvatarSize, setIsEditingAvatarSize] = useState(false);
+          const [tempAvatarSizeInput, setTempAvatarSizeInput] = useState(String(avatarSize));
+          const avatarSizeInputRef = useRef(null);
+
+          const [showErrorModal, setShowErrorModal] = useState(false);
+          const [errorMessage, setErrorMessage] = useState('');
+
+          const [isAvatarControlsOpen, setIsAvatarControlsOpen] = useState(true);
+          const [isBackgroundControlsOpen, setIsBackgroundControlsOpen] = useState(true);
+          const [isSceneControlsOpen, setIsSceneControlsOpen] = useState(true);
+
+          useEffect(() => {
+            try {
+              const savedState = localStorage.getItem('avatarSystemState');
+              if (savedState) {
+                const parsedState = JSON.parse(savedState);
+                setCurrentAvatarIndex(parsedState.currentAvatarIndex || 0);
+                setCurrentAvatarType(parsedState.currentAvatarType || 'default');
+                setCustomAvatarStates(parsedState.customAvatarStates || Array(4).fill(null));
+                setCurrentBackgroundIndex(parsedState.currentBackgroundIndex || 0);
+                setCurrentBackgroundType(parsedState.currentBackgroundType || 'default');
+                setCustomBackgroundStates(parsedState.customBackgroundStates || Array(4).fill(null));
+                setAvatarPosition(parsedState.avatarPosition || { x: 50, y: 50 });
+                setIsMouseFollowEnabled(parsedState.isMouseFollowEnabled || false);
+                setShowAvatarBorder(parsedState.showAvatarBorder !== undefined ? parsedState.showAvatarBorder : true);
+                setAvatarSize(parsedState.avatarSize || 192);
+                setIsAvatarLocked(parsedState.isAvatarLocked !== undefined ? parsedState.isAvatarLocked : false);
+                setIsAvatarControlsOpen(parsedState.isAvatarControlsOpen !== undefined ? parsedState.isAvatarControlsOpen : true);
+                setIsBackgroundControlsOpen(parsedState.isBackgroundControlsOpen !== undefined ? parsedState.isBackgroundControlsOpen : true);
+                setIsSceneControlsOpen(parsedState.isSceneControlsOpen !== undefined ? parsedState.isSceneControlsOpen : true);
+              }
+            } catch (error) {
+              console.error("Error loading from localStorage:", error);
+              setMessage("Error loading saved data. Local storage might be full or corrupted.");
+            }
+          }, []);
+
+          useEffect(() => {
+            if (!isEditingAvatarSize) {
+              setTempAvatarSizeInput(String(avatarSize));
+            }
+          }, [avatarSize, isEditingAvatarSize]);
+
+          useEffect(() => {
+            const stateToSave = {
+              currentAvatarIndex, currentAvatarType, customAvatarStates,
+              currentBackgroundIndex, currentBackgroundType, customBackgroundStates,
+              avatarPosition, isMouseFollowEnabled, showAvatarBorder, avatarSize, isAvatarLocked,
+              isAvatarControlsOpen, isBackgroundControlsOpen, isSceneControlsOpen,
+            };
+            try {
+              localStorage.setItem('avatarSystemState', JSON.stringify(stateToSave));
+            } catch (error) {
+              console.error("Error saving to localStorage:", error);
+              if (error.name === 'QuotaExceededError') {
+                setErrorMessage("Error saving data: Local storage limit reached. Please clear some custom images or presets.");
+                setShowErrorModal(true);
+              } else {
+                setMessage("Error saving data. Local storage might be full or corrupted.");
+              }
+            }
+          }, [currentAvatarIndex, currentAvatarType, customAvatarStates, currentBackgroundIndex, currentBackgroundType, customBackgroundStates, avatarPosition, isMouseFollowEnabled, showAvatarBorder, avatarSize, isAvatarLocked, isAvatarControlsOpen, isBackgroundControlsOpen, isSceneControlsOpen]);
+
+          useEffect(() => {
+            const handleKeyDown = (event) => {
+              const activeElement = document.activeElement;
+              const isInputFocused = activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA');
+
+              if (isEditingAvatarSize || isInputFocused || showErrorModal) {
+                return;
+              }
+              if (event.key >= '1' && event.key <= '4') {
+                const newIndex = parseInt(event.key, 10) - 1;
+                if (customAvatarStates[newIndex]) {
+                  setCurrentAvatarType('custom');
+                } else {
+                  setCurrentAvatarType('default');
+                }
+                setCurrentAvatarIndex(newIndex);
+              } else if (event.key >= '5' && event.key <= '8') {
+                const newIndex = parseInt(event.key, 10) - 5;
+                if (customBackgroundStates[newIndex]) {
+                  setCurrentBackgroundType('custom');
+                  setCurrentBackgroundIndex(newIndex);
+                } else {
+                  showTemporaryMessage(`No custom background uploaded for slot ${newIndex + 1}. Reverting to default Background 1.`);
+                  setCurrentBackgroundType('default');
+                  setCurrentBackgroundIndex(0);
+                }
+              } else if (event.key === 'p' || event.key === 'P') {
+                setShowSceneMenu(prev => !prev);
+              } else if (event.key === 'm' || event.key === 'M') {
+                setIsMouseFollowEnabled(prev => !prev);
+              } else if (event.key === 'h' || event.key === 'H') {
+                setShowUI(prev => !prev);
+                if (showSceneMenu && !showUI) {
+                  setShowSceneMenu(false);
+                }
+                if (showControlMap && !showUI) {
+                  setShowControlMap(false);
+                }
+              } else if (event.key === 'k' || event.key === 'K') {
+                setShowControlMap(prev => !prev);
+              } else if (event.key === 'l' || event.key === 'L') {
+                setIsAvatarLocked(prev => !prev);
+              }
+            };
+            window.addEventListener('keydown', handleKeyDown);
+            return () => { window.removeEventListener('keydown', handleKeyDown); };
+          }, [currentAvatarIndex, currentAvatarType, customAvatarStates, currentBackgroundIndex, currentBackgroundType, customBackgroundStates, showUI, showSceneMenu, showControlMap, isEditingAvatarSize, showErrorModal]);
+
+          const showTemporaryMessage = useCallback((msg, duration = 5000) => {
+            setMessage(msg);
+            const timer = setTimeout(() => { setMessage(''); }, duration);
+            return () => clearTimeout(timer);
+          }, []);
+
+          const showTemporaryErrorModal = useCallback((msg, duration = 5000) => {
+            setErrorMessage(msg);
+            setShowErrorModal(true);
+            const timer = setTimeout(() => { setShowErrorModal(false); setErrorMessage(''); }, duration);
+            return () => clearTimeout(timer);
+          }, []);
+
+          const compressImage = useCallback((file, maxWidth, maxHeight, quality) => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(file);
+              reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  let width = img.width;
+                  let height = img.height;
+                  if (width > height) {
+                    if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+                  } else {
+                    if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
+                  }
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx.clearRect(0, 0, canvas.width, canvas.height);
+                  ctx.drawImage(img, 0, 0, width, height);
+                  let outputMimeType = file.type;
+                  if (!['image/png', 'image/webp'].includes(file.type)) { outputMimeType = 'image/jpeg'; }
+                  let dataUrl;
+                  if (outputMimeType === 'image/jpeg') { dataUrl = canvas.toDataURL(outputMimeType, quality); } else { dataUrl = canvas.toDataURL(outputMimeType); }
+                  resolve(dataUrl);
+                };
+                img.onerror = (error) => reject(error);
+              };
+              reader.onerror = (error) => reject(error);
+            });
+          }, []);
+
+          const handleCustomAvatarUpload = async (event, index) => {
+            const file = event.target.files[0];
+            if (file) {
+              if (file.size > 1024 * 1024) { showTemporaryMessage(`Original avatar image size is large (${(file.size / (1024 * 1024)).toFixed(2)}MB). Compressing for optimal performance.`); }
+              try {
+                const compressedDataUrl = await compressImage(file, 256, 256, 0.8);
+                const newCustomAvatarStates = [...customAvatarStates];
+                newCustomAvatarStates[index] = compressedDataUrl;
+                setCustomAvatarStates(newCustomAvatarStates);
+                setCurrentAvatarIndex(index);
+                setCurrentAvatarType('custom');
+              } catch (error) {
+                console.error("Error compressing or uploading avatar:", error);
+                showTemporaryErrorModal('Failed to upload and compress avatar image. Please try a smaller file or different format.');
+              }
+              event.target.value = '';
+            }
+          };
+
+          const handleClearCustomAvatar = (index) => {
+            const newCustomAvatarStates = [...customAvatarStates];
+            newCustomAvatarStates[index] = null;
+            setCustomAvatarStates(newCustomAvatarStates);
+            if (currentAvatarIndex === index && currentAvatarType === 'custom') { setCurrentAvatarType('default'); }
+            showTemporaryMessage(`Custom avatar ${index + 1} cleared.`);
+          };
+
+          const handleCustomBackgroundUpload = async (event, index) => {
+            const file = event.target.files[0];
+            if (file) {
+              if (file.size > 1024 * 1024 * 3) { showTemporaryMessage(`Original background image size is large (${(file.size / (1024 * 1024)).toFixed(2)}MB). Compressing for optimal performance.`); }
+              try {
+                const compressedDataUrl = await compressImage(file, 1280, 720, 0.7);
+                const newCustomBackgroundStates = [...customBackgroundStates];
+                newCustomBackgroundStates[index] = compressedDataUrl;
+                setCustomBackgroundStates(newCustomBackgroundStates);
+                setCurrentBackgroundIndex(index);
+                setCurrentBackgroundType('custom');
+              } catch (error) {
+                console.error("Error compressing or uploading background:", error);
+                showTemporaryErrorModal('Failed to upload and compress background image. Please try a smaller file or different format.');
+              }
+              event.target.value = '';
+            }
+          };
+
+          const handleClearCustomBackground = (index) => {
+            const newCustomBackgroundStates = [...customBackgroundStates];
+            newCustomBackgroundStates[index] = null;
+            setCustomBackgroundStates(newCustomBackgroundStates);
+            if (currentBackgroundIndex === index && currentBackgroundType === 'custom') { setCurrentBackgroundType('default'); }
+            showTemporaryMessage(`Custom background ${index + 1} cleared.`);
+          };
+
+          const handleDisplayAreaMouseMove = useCallback((e) => {
+            if (!displayAreaRef.current) return;
+            if (isMouseFollowEnabled && !isAvatarLocked) {
+              const displayRect = displayAreaRef.current.getBoundingClientRect();
+
+              // Calculate newX and newY as percentages of the display area
+              // Allow the avatar's center to go beyond 0% and 100% for clipping effect
+              let newX = ((e.clientX - displayRect.left) / displayRect.width) * 100;
+              let newY = ((e.clientY - displayRect.top) / displayRect.height) * 100;
+
+              setAvatarPosition({ x: newX, y: newY });
+            }
+          }, [isMouseFollowEnabled, isAvatarLocked]);
+
+          const handleAvatarSizeInputTempChange = (e) => { setTempAvatarSizeInput(e.target.value); };
+          const applyAvatarSizeFromInput = () => {
+            let value = parseInt(tempAvatarSizeInput, 10);
+            if (isNaN(value)) { value = AVATAR_SIZE_MIN; }
+            value = Math.max(AVATAR_SIZE_MIN, Math.min(AVATAR_SIZE_MAX, value));
+            setAvatarSize(value);
+            setIsEditingAvatarSize(false);
+          };
+          const handleAvatarSizeInputFocus = () => { setIsEditingAvatarSize(true); };
+          const handleAvatarSizeInputBlur = () => { applyAvatarSizeFromInput(); };
+          const handleAvatarSizeInputKeyPress = (e) => { if (e.key === 'Enter') { applyAvatarSizeFromInput(); } };
+
+          const handleDownloadScene = () => {
+            const sceneConfig = {
+              currentAvatarIndex,
+              currentAvatarType,
+              customAvatarStates,
+              currentBackgroundIndex,
+              currentBackgroundType,
+              customBackgroundStates,
+              avatarPosition,
+              isMouseFollowEnabled,
+              showAvatarBorder,
+              avatarSize,
+              isAvatarLocked,
+              isAvatarControlsOpen,
+              isBackgroundControlsOpen,
+              isSceneControlsOpen,
+            };
+
+            const jsonString = JSON.stringify(sceneConfig, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.-]/g, '');
+            a.download = `kawaii-avatar-scene-${timestamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showTemporaryMessage('Current scene downloaded as JSON file!');
+          };
+
+          const handleUploadScene = (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+              return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              try {
+                const loadedConfig = JSON.parse(e.target.result);
+
+                if (
+                  typeof loadedConfig.currentAvatarIndex !== 'number' ||
+                  !['default', 'custom'].includes(loadedConfig.currentAvatarType) ||
+                  !Array.isArray(loadedConfig.customAvatarStates) ||
+                  typeof loadedConfig.currentBackgroundIndex !== 'number' ||
+                  !['default', 'custom'].includes(loadedConfig.currentBackgroundType) ||
+                  !Array.isArray(loadedConfig.customBackgroundStates) ||
+                  typeof loadedConfig.avatarPosition !== 'object' ||
+                  typeof loadedConfig.isMouseFollowEnabled !== 'boolean' ||
+                  typeof loadedConfig.showAvatarBorder !== 'boolean' ||
+                  typeof loadedConfig.avatarSize !== 'number' ||
+                  typeof loadedConfig.isAvatarLocked !== 'boolean'
+                ) {
+                  showTemporaryErrorModal('Invalid scene file format. Missing core configuration.');
+                  return;
+                }
+
+                setCurrentAvatarIndex(loadedConfig.currentAvatarIndex);
+                setCurrentAvatarType(loadedConfig.currentAvatarType);
+                setCustomAvatarStates(loadedConfig.customAvatarStates);
+                setCurrentBackgroundIndex(loadedConfig.currentBackgroundIndex);
+                setCurrentBackgroundType(loadedConfig.currentBackgroundType);
+                setCustomBackgroundStates(loadedConfig.customBackgroundStates);
+                setAvatarPosition(loadedConfig.avatarPosition);
+                setIsMouseFollowEnabled(loadedConfig.isMouseFollowEnabled);
+                setShowAvatarBorder(loadedConfig.showAvatarBorder);
+                setAvatarSize(loadedConfig.avatarSize);
+                setIsAvatarLocked(loadedConfig.isAvatarLocked);
+
+                setIsAvatarControlsOpen(loadedConfig.isAvatarControlsOpen !== undefined ? loadedConfig.isAvatarControlsOpen : true);
+                setIsBackgroundControlsOpen(loadedConfig.isBackgroundControlsOpen !== undefined ? loadedConfig.isBackgroundControlsOpen : true);
+                setIsSceneControlsOpen(loadedConfig.isSceneControlsOpen !== undefined ? loadedConfig.isSceneControlsOpen : true);
+
+                showTemporaryMessage('Scene loaded successfully!');
+              } catch (error) {
+                console.error("Error loading scene file:", error);
+                showTemporaryErrorModal('Failed to load scene. Invalid JSON file or corrupted data.');
+              }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+          };
+
+          const currentAvatarSrc = currentAvatarType === 'custom' && customAvatarStates[currentAvatarIndex]
+            ? customAvatarStates[currentAvatarIndex]
+            : defaultAvatarStates[currentAvatarIndex]?.src;
+
+          const currentBackgroundSrc = currentBackgroundType === 'custom' && customBackgroundStates[currentBackgroundIndex]
+            ? customBackgroundStates[currentBackgroundIndex]
+            : defaultBackgrounds[currentBackgroundIndex]?.src;
+
+          return React.createElement(
+            "div",
+            { className: `h-screen w-screen flex flex-col items-stretch bg-[#FFC8DD] font-inter relative text-gray-800 transition-all duration-500 ease-in-out ${showUI ? 'p-4 border-4 border-gray-200 rounded-lg' : 'p-0 border-0 rounded-none'}` }, // Conditional styling on the root div
+            React.createElement(
+              "div",
+              {
+                ref: displayAreaRef,
+                className: `relative w-full flex-grow flex items-center justify-center bg-cover bg-center transition-all duration-500 ease-in-out overflow-hidden
+                    ${showUI ? 'mb-4 rounded-xl shadow-xl' : 'mb-0 rounded-none shadow-none'}
+                `, // Conditional styling for rounded corners, shadow, and margin-bottom
+                style: { backgroundImage: `url(${currentBackgroundSrc})` },
+                onMouseMove: handleDisplayAreaMouseMove // Mouse move listener here
+              },
+              React.createElement("img", {
+                ref: avatarRef,
+                src: currentAvatarSrc,
+                alt: "Avatar",
+                className: `absolute object-contain transition-transform duration-100 ease-out ${isMouseFollowEnabled ? 'cursor-none' : 'cursor-auto'} ${showAvatarBorder ? 'rounded-full border-4 border-white shadow-lg' : ''}`,
+                style: {
+                  left: `${avatarPosition.x}%`,
+                  top: `${avatarPosition.y}%`,
+                  transform: `translate(-50%, -50%)`,
+                  width: `${avatarSize}px`,
+                  height: `${avatarSize}px`
+                }
+              })
+            ),
+            // Controls Section - Moved back outside the displayAreaRef
+            React.createElement(
+              "div",
+              {
+                className: `flex-shrink-0 w-full transition-all duration-500 ease-in-out overflow-hidden
+                    ${showUI
+                        ? 'max-w-4xl bg-white p-6 rounded-xl shadow-xl flex flex-col md:flex-row justify-around items-start gap-6 mx-auto max-h-[500px] opacity-100 mt-4'
+                        : 'max-h-0 opacity-0 pointer-events-none p-0 m-0 border-0 shadow-none rounded-none'
+                    }
+                `
+              },
+              React.createElement(
+                "div",
+                { className: "flex flex-col items-center flex-1 min-w-[200px] w-full" },
+                React.createElement(
+                    "div",
+                    {
+                        className: "w-full flex justify-between items-center cursor-pointer pb-3 mb-3 border-b border-gray-200",
+                        onClick: () => setIsAvatarControlsOpen(prev => !prev)
+                    },
+                    React.createElement("h3", { className: "text-lg font-semibold text-gray-800" }, "Avatar States (Keys 1-4)"),
+                    React.createElement("i", { className: `fas fa-chevron-down transform transition-transform duration-300 ${isAvatarControlsOpen ? 'rotate-0' : '-rotate-90'}` })
+                ),
+                React.createElement(
+                    "div",
+                    { className: `w-full overflow-hidden transition-all duration-300 ease-in-out ${isAvatarControlsOpen ? 'max-h-screen' : 'max-h-0'}` },
+                    React.createElement(
+                        "div",
+                        { className: "grid grid-cols-2 gap-3 w-full" },
+                        defaultAvatarStates.map((state, index) =>
+                            React.createElement(
+                                "button",
+                                {
+                                    key: `default-avatar-${index}`,
+                                    onClick: () => {
+                                        setCurrentAvatarIndex(index);
+                                        setCurrentAvatarType('default');
+                                    },
+                                    className: `px-4 py-2 rounded-lg font-medium transition-all duration-200 ease-in-out ${currentAvatarIndex === index && currentAvatarType === 'default' ? 'bg-[#A2D2FF] text-white shadow-md' : 'bg-[#BDE0FE] text-gray-800 hover:bg-[#A2D2FF]'} focus:outline-none focus:ring-2 focus:ring-[#A2D2FF] focus:ring-opacity-50`
+                                },
+                                state.name
+                            )
+                        )
+                    ),
+                    React.createElement("h4", { className: "text-md font-semibold text-gray-700 mt-6 mb-3" }, "Custom Avatar Slots"),
+                    React.createElement(
+                        "div",
+                        { className: "grid grid-cols-2 gap-3 w-full" },
+                        customAvatarStates.map((src, index) =>
+                            React.createElement(
+                                React.Fragment,
+                                { key: `custom-avatar-${index}` },
+                                React.createElement(
+                                    "button",
+                                    {
+                                        onClick: () => {
+                                            setCurrentAvatarIndex(index);
+                                            setCurrentAvatarType('custom');
+                                        },
+                                        disabled: !src,
+                                        className: `px-4 py-2 rounded-lg font-medium transition-all duration-200 ease-in-out ${currentAvatarIndex === index && currentAvatarType === 'custom' ? 'bg-[#A2D2FF] text-white shadow-md' : 'bg-[#BDE0FE] text-gray-800 hover:bg-[#A2D2FF]'} ${!src ? 'opacity-50 cursor-not-allowed' : ''} focus:outline-none focus:ring-2 focus:ring-[#FFAFCC] focus:ring-opacity-50`
+                                    },
+                                    `Custom ${index + 1}`
+                                ),
+                                React.createElement(
+                                    "div",
+                                    { className: "flex flex-col gap-1" },
+                                    React.createElement(
+                                        "label",
+                                        { className: "px-4 py-2 bg-[#BDE0FE] text-gray-800 rounded-lg font-medium cursor-pointer hover:bg-[#A2D2FF] transition-all duration-200 ease-in-out text-center text-sm" },
+                                        "Upload",
+                                        React.createElement("input", { type: "file", accept: "image/*", className: "hidden", onChange: (e) => handleCustomAvatarUpload(e, index) })
+                                    ),
+                                    src && React.createElement(
+                                        "button",
+                                        {
+                                            onClick: () => handleClearCustomAvatar(index),
+                                            className: "px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all duration-200 ease-in-out text-sm"
+                                        },
+                                        "Clear"
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+              ),
+              React.createElement(
+                "div",
+                { className: "flex flex-col items-center flex-1 min-w-[200px] w-full md:border-l md:border-gray-200 md:pl-6 md:py-0 py-6" },
+                React.createElement(
+                    "div",
+                    {
+                        className: "w-full flex justify-between items-center cursor-pointer pb-3 mb-3 border-b border-gray-200",
+                        onClick: () => setIsBackgroundControlsOpen(prev => !prev)
+                    },
+                    React.createElement("h3", { className: "text-lg font-semibold text-gray-800" }, "Backgrounds (Keys 5-8)"),
+                    React.createElement("i", { className: `fas fa-chevron-down transform transition-transform duration-300 ${isBackgroundControlsOpen ? 'rotate-0' : '-rotate-90'}` })
+                ),
+                React.createElement(
+                    "div",
+                    { className: `w-full overflow-hidden transition-all duration-300 ease-in-out ${isBackgroundControlsOpen ? 'max-h-screen' : 'max-h-0'}` },
+                    React.createElement(
+                        "div",
+                        { className: "grid grid-cols-2 gap-3 w-full mt-3" },
+                        customBackgroundStates.map((src, index) =>
+                            React.createElement(
+                                "label",
+                                { key: `custom-background-upload-label-${index}`, className: "px-4 py-2 bg-[#CDB4DB] text-white rounded-lg font-medium cursor-pointer hover:bg-[#E0BBE4] transition-all duration-200 ease-in-out text-center text-sm" },
+                                `Upload ${defaultBackgrounds[index].name}`,
+                                React.createElement("input", { type: "file", accept: "image/*", className: "hidden", onChange: (e) => handleCustomBackgroundUpload(e, index) })
+                            )
+                        )
+                    ),
+                    React.createElement(
+                        "div",
+                        { className: "grid grid-cols-2 gap-3 w-full mt-3" },
+                        customBackgroundStates.map((src, index) =>
+                            React.createElement(
+                                "div",
+                                { key: `custom-background-clear-container-${index}`, className: "flex justify-center" },
+                                src ? React.createElement(
+                                    "button",
+                                    {
+                                        onClick: () => handleClearCustomBackground(index),
+                                        className: "px-2 py-1 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-all duration-200 ease-in-out text-xs text-center overflow-hidden whitespace-nowrap text-ellipsis"
+                                    },
+                                    `Clear ${defaultBackgrounds[index].name}`
+                                ) : React.createElement(
+                                    "div",
+                                    { className: "px-2 py-1 bg-gray-200 text-gray-500 rounded-lg font-medium text-xs text-center" },
+                                    "Empty Slot"
+                                )
+                            )
+                        )
+                    ),
+                    React.createElement(
+                        "div",
+                        { className: "mt-6 w-full" },
+                        React.createElement("h4", { className: "text-md font-semibold text-gray-700 mb-2" }, "Avatar Size"),
+                        isEditingAvatarSize ? React.createElement("input", {
+                            type: "number",
+                            ref: avatarSizeInputRef,
+                            value: tempAvatarSizeInput,
+                            onChange: handleAvatarSizeInputTempChange,
+                            onFocus: handleAvatarSizeInputFocus,
+                            onBlur: handleAvatarSizeInputBlur,
+                            onKeyPress: handleAvatarSizeInputKeyPress,
+                            min: AVATAR_SIZE_MIN,
+                            max: AVATAR_SIZE_MAX,
+                            className: "w-full p-2 border border-gray-300 rounded-lg text-center focus:ring-[#A2D2FF] focus:border-[#A2D2FF]",
+                            autoFocus: true
+                        }) : React.createElement(
+                            "p",
+                            {
+                                className: "block text-gray-700 text-sm font-bold mb-2 cursor-pointer hover:text-[#A2D2FF]",
+                                onClick: () => {
+                                    setIsEditingAvatarSize(true);
+                                    setTempAvatarSizeInput(String(avatarSize));
+                                }
+                            },
+                            `Size: ${avatarSize}px`
+                        ),
+                        React.createElement("input", {
+                            type: "range",
+                            id: "avatarSize",
+                            min: AVATAR_SIZE_MIN,
+                            max: AVATAR_SIZE_MAX,
+                            step: "1",
+                            value: avatarSize,
+                            onChange: (e) => setAvatarSize(parseInt(e.target.value)),
+                            className: "w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#A2D2FF]"
+                        })
+                    )
+                )
+              ),
+              React.createElement(
+                "div",
+                { className: "flex flex-col items-center flex-1 min-w-[200px] w-full md:border-l md:border-gray-200 md:pl-6 md:py-0 py-6" },
+                React.createElement(
+                    "div",
+                    {
+                        className: "w-full flex justify-between items-center cursor-pointer pb-3 mb-3 border-b border-gray-200",
+                        onClick: () => setIsSceneControlsOpen(prev => !prev)
+                    },
+                    React.createElement("h3", { className: "text-lg font-semibold text-gray-800" }, "Scene Controls"),
+                    React.createElement("i", { className: `fas fa-chevron-down transform transition-transform duration-300 ${isSceneControlsOpen ? 'rotate-0' : '-rotate-90'}` })
+                ),
+                React.createElement(
+                    "div",
+                    { className: `w-full overflow-hidden transition-all duration-300 ease-in-out ${isSceneControlsOpen ? 'max-h-screen' : 'max-h-0'}` },
+                    React.createElement(
+                        "button",
+                        {
+                            onClick: () => setShowAvatarBorder(prev => !prev),
+                            className: `px-6 py-3 mt-3 w-full rounded-lg font-bold shadow-md transition-all duration-200 ease-in-out ${showAvatarBorder ? 'bg-[#A2D2FF] text-white hover:bg-[#BDE0FE]' : 'bg-[#BDE0FE] text-gray-800 hover:bg-[#A2D2FF]'} focus:outline-none focus:ring-2 focus:ring-[#A2D2FF] focus:ring-opacity-50`
+                        },
+                        showAvatarBorder ? 'Hide Avatar Border' : 'Show Avatar Border'
+                    ),
+                    React.createElement(
+                        "button",
+                        {
+                            onClick: () => setShowControlMap(true),
+                            className: "px-6 py-3 mt-3 w-full rounded-lg font-bold shadow-md bg-[#BDE0FE] text-gray-800 hover:bg-[#A2D2FF] transition-colors focus:outline-none focus:ring-2 focus:ring-[#A2D2FF] focus:ring-opacity-50",
+                            title: "Show Keyboard Controls"
+                        },
+                        "Show Controls (K)"
+                    ),
+                    React.createElement(
+                        "button",
+                        {
+                            onClick: () => setShowSceneMenu(prev => !prev),
+                            className: "px-6 py-3 mt-3 bg-[#A2D2FF] text-white rounded-lg font-bold shadow-md hover:bg-[#BDE0FE] transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#A2D2FF] focus:ring-opacity-50 w-full"
+                        },
+                        showSceneMenu ? 'Hide Scene Menu (P)' : 'Save/Load Scene (P)'
+                    ),
+                    React.createElement(
+                        "button",
+                        {
+                            onClick: () => setShowUI(prev => !prev),
+                            className: "px-6 py-3 mt-3 w-full rounded-lg font-bold shadow-md bg-[#BDE0FE] text-gray-800 hover:bg-[#A2D2FF] transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#A2D2FF] focus:ring-opacity-50"
+                        },
+                        "Toggle UI (H)"
+                    )
+                )
+              )
+            ),
+            message && React.createElement(
+              "div",
+              {
+                className: "fixed bottom-4 left-1/2 -translate-x-1/2 p-3 bg-[#FFC8DD] text-gray-800 rounded-lg shadow-md z-40 cursor-pointer",
+                onClick: () => setMessage('')
+              },
+              message
+            ),
+            showSceneMenu && React.createElement(
+              "div",
+              { className: "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-xl shadow-2xl z-20 w-11/12 max-w-md border-2 border-[#FFAFCC]" },
+              React.createElement("h2", { className: "text-2xl font-bold text-gray-900 mb-4 text-center" }, "Scene Management"),
+              React.createElement(
+                "div",
+                { className: "mb-4 space-y-3" },
+                React.createElement(
+                  "button",
+                  {
+                    onClick: handleDownloadScene,
+                    className: "w-full px-4 py-2 bg-[#A2D2FF] text-white rounded-lg font-bold hover:bg-[#BDE0FE] transition-all duration-200 ease-in-out"
+                  },
+                  "Download Current Scene"
+                ),
+                React.createElement(
+                  "label",
+                  {
+                    className: "w-full px-4 py-2 bg-[#CDB4DB] text-white rounded-lg font-bold hover:bg-[#E0BBE4] transition-all duration-200 ease-in-out text-center cursor-pointer block"
+                  },
+                  "Upload Scene File",
+                  React.createElement("input", {
+                    type: "file",
+                    accept: "application/json",
+                    className: "hidden",
+                    onChange: handleUploadScene
+                  })
+                )
+              )
+            ),
+            showControlMap && React.createElement(
+              "div",
+              {
+                className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50",
+                onClick: () => setShowControlMap(false)
+              },
+              React.createElement(
+                "div",
+                {
+                  className: "bg-white p-8 rounded-xl shadow-2xl w-11/12 max-w-md relative border-2 border-[#BDE0FE]",
+                  onClick: (e) => e.stopPropagation()
+                },
+                React.createElement("h2", { className: "text-2xl font-bold text-gray-900 mb-4 text-center" }, "Keyboard Controls"),
+                React.createElement(
+                  "ul",
+                  { className: "list-disc list-inside text-gray-700 space-y-2" },
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "1, 2, 3, 4:"), " Switch Avatar States (Default/Custom)"),
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "5, 6, 7, 8:"), " Switch Custom Backgrounds (if uploaded)"),
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "P:"), " Toggle Scene Menu"),
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "M:"), " Toggle Mouse Follow"),
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "H:"), " Toggle UI Visibility (Hide/Show Controls)"),
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "K:"), " Toggle this Control Map"),
+                  React.createElement("li", null, React.createElement("strong", { className: "font-semibold" }, "L:"), " Toggle Avatar Lock (prevents mouse follow movement)")
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => setShowControlMap(false),
+                    className: "mt-6 w-full px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+                  },
+                  "Close"
+                )
+              )
+            ),
+            showErrorModal && React.createElement(
+              "div",
+              {
+                className: "fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50",
+                onClick: () => { setShowErrorModal(false); setErrorMessage(''); }
+              },
+              React.createElement(
+                "div",
+                {
+                  className: "bg-white p-8 rounded-xl shadow-2xl w-11/12 max-w-sm relative border-2 border-red-400 text-center",
+                  onClick: (e) => e.stopPropagation()
+                },
+                React.createElement("h2", { className: "text-2xl font-bold text-red-700 mb-4" }, "Error!"),
+                React.createElement("p", { className: "text-gray-800 mb-6" }, errorMessage),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => { setShowErrorModal(false); setErrorMessage(''); },
+                    className: "w-full px-4 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50"
+                  },
+                  "Dismiss"
+                )
+              )
+            )
+          );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+    </script>
+</body>
+</html>
